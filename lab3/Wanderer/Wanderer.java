@@ -4,6 +4,7 @@ import lejos.hardware.lcd.TextLCD;
 import lejos.hardware.port.SensorPort;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.hardware.sensor.SensorMode;
+import java.lang.*;
 
 public class Wanderer {
     //Private Variables
@@ -15,7 +16,12 @@ public class Wanderer {
     private EV3UltrasonicSensor forward;
     private EV3UltrasonicSensor backLeft;
     private EV3UltrasonicSensor backRight;
-   
+
+    //Ultrasonic Sensor Sample Providers
+    private SampleProvider distForward;
+    private SampleProvider distBackR;
+    private SampleProvider distBackL;
+    
 
     //Motors
     private BaseRegulatedMotor left;
@@ -49,15 +55,20 @@ public class Wanderer {
     /*
      * Constructor Method
      */
-    public Wanderer(BaseRegulatedMotor left,
-		    BaseRegulatedMotor right,
-		    Port forward, Port backLeft,
-		    Port backRight){
-	this.left = left;
-	this.right = right;
-	this.forward = forward;
-	this.backLeft = backLeft;
-	this.backRight = backRight;
+    public Wanderer(BaseRegulatedMotor l,
+		    BaseRegulatedMotor r,
+		    Port f, Port bL,
+		    Port bR){
+	this.left = l;
+	this.right = r;
+	
+	this.forward = new EV3UltrasonicSensor(f);
+	this.backLeft = new EV3UltrasonicSensor(bL);
+	this.backRight = new EV3UltrasonicSensor(bR);
+
+	this.distForward = forward.getDistanceMode();
+	this.distBackR = backRight.getDistanceMode();
+	this.distBackL = backLeft.getDistanceMode();    
     }
 
     public void drive(float speed){
@@ -71,6 +82,8 @@ public class Wanderer {
     }
     
     private void wander(){
+	 
+	
 	// if vectorSum == 0, then no target
 	//generate random target
     }
@@ -79,10 +92,35 @@ public class Wanderer {
 	//if r != 0, move toward target
     }
 
-    private int vectorSum(){
-	//read sensors, calculate target
+    private float vectorSum(){
+	float r = 0;
+	float xSum = 0;
+	float ySum = 0;
+	float[] distanceSample = new float[this.distForward];
+	this.distForward.fetchSample(distanceSample,0);
+	r = averageDistance(distanceSample);
+	xSum= xSum + r * Math.cos(0);
+	ySum = ySum + r * Math.sin(0);
+	this.distBackR.fetchSample(distanceSample,0);
+	r = averageDistance(distanceSample);
+	xSum= xSum + r * Math.cos(0);
+	ySum = ySum + r * Math.sin(0);
+	this.distBackL.fetchSample(distanceSample,0);
+	r = averageDistance(distanceSample);
+	xSum= xSum + r * Math.cos(0);
+	ySum = ySum + r * Math.sin(0);
+	this.r = Math.sqrt((ySum*ySum)+(xSum*xSum));
+	this.theta = Math.atan(ySum/xSum);
 	//r and theta with vector sum
-	//return r
+	return this.r;
+    }
+
+    private float averageDistance(float[] sample){
+	float avg = 0;
+	for (int ndx = 0; ndx < sample.length ; ndx++){
+	    avg += sample[ndx];
+	}
+	return avg/(sample.length);
     }
     
 }  
