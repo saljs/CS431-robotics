@@ -3,22 +3,17 @@ import lejos.hardware.motor.BaseRegulatedMotor;
 import lejos.hardware.Button;
 import lejos.hardware.port.Port;
 import lejos.hardware.port.SensorPort;
-import lejos.hardware.sensor.EV3UltrasonicSensor;
+import lejos.hardware.sensor.NXTUltrasonicSensor;
 import lejos.hardware.sensor.SensorMode;
 import lejos.robotics.SampleProvider;
 import java.lang.Math;
 
 public class Wanderer {
 
-    //Ultrasonic Sensors
-    private EV3UltrasonicSensor forward;
-    private EV3UltrasonicSensor backLeft;
-    private EV3UltrasonicSensor backRight;
-
     //Ultrasonic Sensor Sample Providers
-    private SampleProvider distForward;
-    private SampleProvider distBackR;
-    private SampleProvider distBackL;
+    private SampleProvider forward;
+    private SampleProvider backLeft;
+    private SampleProvider backRight;
     
     //Motors
     private BaseRegulatedMotor left;
@@ -27,7 +22,6 @@ public class Wanderer {
     //Wandering
     private Vector wanderDir;
     private long lastHeading;
-    private float magDecay;
     private float dirDecay;
     private float decayRate;
     
@@ -35,10 +29,10 @@ public class Wanderer {
         Wanderer pilot = new Wanderer((BaseRegulatedMotor)Motor.C, 
                         (BaseRegulatedMotor)Motor.A,
                         SensorPort.S1, SensorPort.S2,
-                        SensorPort.S3, (float)0.9);
+                        SensorPort.S3, (float)0.99);
 
         //Kf Kt maxDist time
-        pilot.drive((float)200.0, (float)100.0, (float)0.2, 5000);
+        pilot.drive((float)100.0, (float)200.0, (float)5.0, 5000);
     }
 
     /*
@@ -51,17 +45,19 @@ public class Wanderer {
         this.left = l;
         this.right = r;
         
-        this.forward = new EV3UltrasonicSensor(f);
-        this.backLeft = new EV3UltrasonicSensor(bL);
-        this.backRight = new EV3UltrasonicSensor(bR);
-
-        this.distForward = forward.getDistanceMode();
-        this.distBackR = backRight.getDistanceMode();
-        this.distBackL = backLeft.getDistanceMode();
-
+        NXTUltrasonicSensor sensorforward = new NXTUltrasonicSensor(f);
+        NXTUltrasonicSensor sensorbackLeft = new NXTUltrasonicSensor(bL);
+        NXTUltrasonicSensor sensorbackRight = new NXTUltrasonicSensor(bR);
+        
+        sensorforward.enable();
+        sensorbackLeft.enable();
+        sensorbackRight.enable();
+        
+        this.forward = sensorforward.getDistanceMode();
+        this.backLeft = sensorbackLeft.getDistanceMode();
+        this.backRight = sensorbackRight.getDistanceMode();
+        
         this.lastHeading = 0;
-        this.magDecay = (float)1.0;
-        this.dirDecay = (float)1.0;
         this.decayRate = decay;
     }
 
@@ -104,9 +100,12 @@ public class Wanderer {
         if(System.currentTimeMillis() - this.lastHeading >= time) {
             //generate random vector
             this.wanderDir = new Vector((float)(Math.random() * 2 * Math.PI * this.dirDecay),
-                                        (float)(Math.random() * distMax * this.magDecay));
+                                        (float)(Math.random() * distMax));
+            this.dirDecay = (float)1.0;
+            this.lastHeading = System.currentTimeMillis();
+        }
+        else {
             this.dirDecay *= this.decayRate;
-            this.magDecay *= this.decayRate;
         }
     }
     
@@ -115,20 +114,20 @@ public class Wanderer {
      *  ultrasonic sensor data
      */
     private Vector avoid() {
-        float[] distanceSample = new float[this.distForward.sampleSize()];
+        float[] distanceSample = new float[this.forward.sampleSize()];
         Vector heading = new Vector();
         
         //forward (pulled 180 degrees)
-        this.distForward.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)3.14159, averageDistance(distanceSample)));
+        this.forward.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)3.14159, (float)(1.0 / averageDistance(distanceSample))));
     
         //back right (pulled 300 degrees)
-        this.distBackR.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)5.23599, averageDistance(distanceSample)));
+        this.backRight.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)5.23599, (float)(1.0 / averageDistance(distanceSample))));
         
         //back left (pulled 60 degress)
-        this.distBackL.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)1.04720, averageDistance(distanceSample)));
+        this.backLeft.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)1.04720, (float)(1.0 / averageDistance(distanceSample))));
         
         return heading;
     }
@@ -162,11 +161,14 @@ public class Wanderer {
         /*
          * Value Constructor
          */
-        public Vector(float direction, float magnitide) {
+        public Vector(float direction, float magnitude) {
             while(direction > Math.PI) {
                 direction -= (float)(2 * Math.PI);
             }
             this.direction = direction;
+            if(Double.isInfinite(magnitude)) {
+                magnitude = (float)1.0;
+            }
             this.magnitude = magnitude;
         }
 
