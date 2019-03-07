@@ -148,6 +148,9 @@ public class Wanderer {
          * Value Constructor
          */
         public Vector(float direction, float magnitide) {
+            while(direction > Math.PI) {
+                direction = (float)Math.PI - direction;
+            }
             this.direction = direction;
             this.magnitude = magnitude;
         }
