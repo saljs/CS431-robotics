@@ -149,7 +149,7 @@ public class Wanderer {
          */
         public Vector(float direction, float magnitide) {
             while(direction > Math.PI) {
-                direction = (float)Math.PI - direction;
+                direction -= (float)(2 * Math.PI);
             }
             this.direction = direction;
             this.magnitude = magnitude;
