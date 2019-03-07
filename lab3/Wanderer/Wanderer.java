@@ -79,16 +79,16 @@ public class Wanderer {
             left.setSpeed(Math.abs(speedL));
             right.setSpeed(Math.abs(speedR));
             if(speedL > 0) {
-                left.backward();
-            }
-            else {
                 left.forward();
             }
+            else {
+                left.backward();
+            }
             if(speedR > 0) {
-                right.backward();
+                right.forward();
             }
             else {
-                right.forward();
+                right.backward();
             }
         }
         left.stop();
@@ -118,17 +118,17 @@ public class Wanderer {
         float[] distanceSample = new float[this.distForward.sampleSize()];
         Vector heading = new Vector();
         
-        //forward
+        //forward (pulled 180 degrees)
         this.distForward.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)0.0, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)3.14159, averageDistance(distanceSample)));
     
-        //back right (240 degrees)
+        //back right (pulled 300 degrees)
         this.distBackR.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)4.1888, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)5.23599, averageDistance(distanceSample)));
         
-        //back left (180 degress)
+        //back left (pulled 60 degress)
         this.distBackL.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)2.0944, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)1.04720, averageDistance(distanceSample)));
         
         return heading;
     }
