@@ -1,11 +1,12 @@
-import lejos.hardware.BrickFinder;
-import lejos.hardware.ev3.EV3;
-import lejos.hardware.lcd.TextLCD;
+import lejos.hardware.motor.Motor;
+import lejos.hardware.motor.BaseRegulatedMotor;
+import lejos.hardware.Button;
+import lejos.hardware.port.Port;
 import lejos.hardware.port.SensorPort;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.hardware.sensor.SensorMode;
-import java.lang.*;
-import java.util.Random;
+import lejos.robotics.SampleProvider;
+import java.lang.Math;
 
 public class Wanderer {
 
@@ -22,130 +23,151 @@ public class Wanderer {
     //Motors
     private BaseRegulatedMotor left;
     private BaseRegulatedMotor right;
+
+    //Wandering
+    private Vector wanderDir;
+    private long lastHeading;
+    private float magDecay;
+    private float dirDecay;
+    private float decayRate;
     
     public static void main(String[] args) {
-	Wanderer pilot = new Wanderer((BaseRegulatedMotor)Motor.C, 
-				    (BaseRegulatedMotor)Motor.A,
-				    SensorPort.S1, SensorPort.S2,
-				    SensorPort.S3);
-	pilot.drive(200,5000);
-	/*
-	final EV3 ev3 = (EV3) BrickFinder.getLocal();
-	TextLCD lcd = ev3.getTextLCD();
+        Wanderer pilot = new Wanderer((BaseRegulatedMotor)Motor.C, 
+                        (BaseRegulatedMotor)Motor.A,
+                        SensorPort.S1, SensorPort.S2,
+                        SensorPort.S3, (float)0.9);
 
-	// THIS IS THE RELEVANT CODE
-	EV3UltrasonicSensor sonicSensor = new EV3UltrasonicSensor( SensorPort.S3 );
-	SampleProvider distance = sonicSensor.getDistanceMode();
-	float[] distanceSample = new float[ distance.sampleSize() ];
-
-	long startTime = System.currentTimeMillis();
-	long duration;
-
-	do {
-	    duration = System.currentTimeMillis() - startTime;
-	    // TAKING READINGS FROM THE ULTRA_SONIC SENSOR
-	    distance.fetchSample(distanceSample, 0); 
-	    } while (duration < 60000);*/
+        pilot.drive(200,5000);
     }
 
     /*
      * Constructor Method
      */
     public Wanderer(BaseRegulatedMotor l,
-		    BaseRegulatedMotor r,
-		    Port f, Port bL,
-		    Port bR){
-	this.left = l;
-	this.right = r;
-	
-	this.forward = new EV3UltrasonicSensor(f);
-	this.backLeft = new EV3UltrasonicSensor(bL);
-	this.backRight = new EV3UltrasonicSensor(bR);
+                    BaseRegulatedMotor r,
+                    Port f, Port bL,
+                    Port bR, float decay){
+        this.left = l;
+        this.right = r;
+        
+        this.forward = new EV3UltrasonicSensor(f);
+        this.backLeft = new EV3UltrasonicSensor(bL);
+        this.backRight = new EV3UltrasonicSensor(bR);
 
-	this.distForward = forward.getDistanceMode();
-	this.distBackR = backRight.getDistanceMode();
-	this.distBackL = backLeft.getDistanceMode();
+        this.distForward = forward.getDistanceMode();
+        this.distBackR = backRight.getDistanceMode();
+        this.distBackL = backLeft.getDistanceMode();
+
+        this.lastHeading = 0;
+        this.magDecay = (float)1.0;
+        this.dirDecay = (float)1.0;
+        this.decayRate = decay;
     }
 
-    public void drive(float speed, float time){
-	float[] heading = wander(100);
-	while(Button.ESCAPE.isUp()){
-	    if(System.currentTimeMillis()%time == 0){
-		heading = wander(100);
-	    }
-	    avoid(heading);
-	}
+    public void drive(float speed, long time) {
+        left.forward();
+        right.forward();
+        while(Button.ESCAPE.isUp()){
+            Vector heading = avoid();
+            wander(speed, time);
+            heading.Add(this.wanderDir);
+            //move the robot along this heading
+            float turn = (heading.direction / (float)(2*Math.PI)) * heading.magnitude;
+            left.setSpeed(speed + turn);
+            right.setSpeed(speed - turn);
+        }
+        left.stop();
+        right.stop();
     }
-    /*
-     * adjusts actuator output
-     * @param vector: heading to wander toward
-     */
-    private void avoid(float vector[]){
-	float turn = 0;
-	float[] heading = {0,0};
-
-	heading = vectorSum(heading);
-	//set motors
-	//negative theta -> right
-	//postive theta -> left
-	
-    }
+    
     /*
      * generates random heading
-     * @param: constraint for heading magnitude
+     * @param distMax: constraint for heading magnitude
+     * @param time: number of ms to keep each heading for
      */
-    private void wander(float distMax){
-	//generate random vector
-	float[] vector = new float[2];
-	vector[1] = Math.Random() * 2 * Math.PI;
-	vector[0] = Math.Random() * distMax;
-	return vector;
+    private void wander(float distMax, long time) {
+        if(System.currentTimeMillis() - this.lastHeading >= time) {
+            //generate random vector
+            this.wanderDir = new Vector((float)(Math.random() * 2 * Math.PI * this.dirDecay),
+                                        (float)(Math.random() * distMax * this.magDecay));
+            this.dirDecay *= this.decayRate;
+            this.magDecay *= this.decayRate;
+        }
     }
+    
     /*
-     * Performs vector sum to generate heading consider
-     *  sensed data
-     * @param vector: current heading
+     * Performs vector sum to generate heading based on
+     *  ultrasonic sensor data
      */
-    private float vectorSum(float vector[]){
-	float r = 0;
-	float xSum = 0;
-	float ySum = 0;
-	float[] heading = {0,0};
-	float[] distanceSample = new float[this.distForward];
-	//forward
-	this.distForward.fetchSample(distanceSample,0);
-	r = averageDistance(distanceSample);
-	xSum= xSum - r * Math.cos(0);
-	ySum = ySum - r * Math.sin(0);
-	//back right
-	this.distBackR.fetchSample(distanceSample,0);
-	r = averageDistance(distanceSample);
-	xSum= xSum - r * Math.cos(4*Math.PI/3);
-	ySum = ySum - r * Math.sin(4*Math.PI/3);
-	//back left
-	this.distBackL.fetchSample(distanceSample,0);
-	r = averageDistance(distanceSample);
-	xSum= xSum - r * Math.cos(2*Math.PI/3);
-	ySum = ySum - r * Math.sin(2*Math.PI/3);
-	//wander heading
-	xSum = xSum + vector[0]*Math.cos(vector[1]);
-	ySum = ySum + vector[0]*Math.sin(vector[1]);
-	
-	heading[0] = Math.sqrt((ySum*ySum)+(xSum*xSum));
-	heading[1] = Math.atan(ySum/xSum);
-
-	return heading;
+    private Vector avoid() {
+        float[] distanceSample = new float[this.distForward.sampleSize()];
+        Vector heading = new Vector();
+        
+        //forward
+        this.distForward.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)0.0, averageDistance(distanceSample)));
+    
+        //back right (240 degrees)
+        this.distBackR.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)4.1888, averageDistance(distanceSample)));
+        
+        //back left (180 degress)
+        this.distBackL.fetchSample(distanceSample,0);
+        heading.Add(new Vector((float)2.0944, averageDistance(distanceSample)));
+        
+        return heading;
     }
+    
     /*
      * calculates average distance
      * @param sample: sample of distance from sensor
      */
     private float averageDistance(float[] sample){
-	float avg = 0;
-	for (int ndx = 0; ndx < sample.length ; ndx++){
-	    avg += sample[ndx];
-	}
-	return avg/(sample.length);
+        float avg = 0;
+        for (int ndx = 0; ndx < sample.length ; ndx++){
+            avg += sample[ndx];
+        }
+        return avg/(sample.length);
     }
+
+    /*
+     * Class for vectors
+     */
+    private class Vector {
+        private float direction;
+        private float magnitude;
+
+        /*
+         * Zero Constructor
+         */
+        public Vector() {
+            this.direction = (float)0.0;
+            this.magnitude = (float)0.0;
+        }
+        /*
+         * Value Constructor
+         */
+        public Vector(float direction, float magnitide) {
+            this.direction = direction;
+            this.magnitude = magnitude;
+        }
+
+        /*
+         * Add another vector to this vector
+         * @param other: Vector to add
+         */
+        public void Add(Vector other) {
+            //need to convert to rectangular coords.
+            float x, y;
+            x = (float)Math.cos(this.direction) * this.magnitude;
+            y = (float)Math.sin(this.direction) * this.magnitude;
+            x += (float)Math.cos(other.direction) * other.magnitude;
+            y += (float)Math.sin(other.direction) * other.magnitude;
+            this.magnitude = (float)Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
+            this.direction = (float)Math.atan2(y, x);
+        }
+
+    }
+            
     
 }  
