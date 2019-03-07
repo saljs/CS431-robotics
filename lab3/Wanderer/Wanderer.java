@@ -68,12 +68,13 @@ public class Wanderer {
     }
 
     public void drive(float speed, float time){
-	float[] heading = wander(100);
+	float[] heading = {0,0};
 	while(Button.ESCAPE.isUp()){
-	    if(System.currentTimeMillis()%time == 0){
-		heading = wander(100);
-	    }
-	    avoid(heading);
+	    //wander has internal timer
+	    //need to implement decay in heading
+	    heading = wander(100, time);
+	    avoid(heading,time);
+	    Delay.msDelay(500);
 	}
     }
     /*
@@ -81,26 +82,42 @@ public class Wanderer {
      * @param vector: heading to wander toward
      */
     private void avoid(float vector[]){
-	float turn = 0;
-	float[] heading = {0,0};
-
-	heading = vectorSum(heading);
-	//set motors
-	//negative theta -> right
-	//postive theta -> left
+	float[] heading = vectorSum(heading);//feelforce
+	turn(heading,50);
+	forward(heading);
 	
     }
     /*
      * generates random heading
      * @param: constraint for heading magnitude
      */
-    private void wander(float distMax){
-	//generate random vector
-	float[] vector = new float[2];
-	vector[1] = Math.Random() * 2 * Math.PI;
-	vector[0] = Math.Random() * distMax;
+    private void wander(float distMax, float time){
+	if(System.currentTimeMillis()%time == 0){//generate random vector
+	    float[] vector = new float[2];
+	    vector[1] = Math.Random() * 2 * Math.PI;
+	    vector[0] = Math.Random() * distMax;
+	}
 	return vector;
     }
+    
+    private void turn(float vector[], float turnMag){
+	float turnSpeed = 0;
+	float turnScale = (vector[1]/(2*Math.PI));
+	
+	if(vector[1] > 0 && vector[1] < Math.PI){
+	    turnSpeed = turnMag*turnScale;
+	} else {
+	    turnSpeed = -1*turnMag*turnScale;
+	}
+	
+	left.setSpeed(-1*turnSpeed);
+	right.setSpeed(turnSpeed);
+    }
+    private void forward(float speed){
+	left.setSpeed(left.getSpeed() + speed);
+	right.setSpeed(right.getSpeed() + speed);
+    }
+    
     /*
      * Performs vector sum to generate heading consider
      *  sensed data
