@@ -1,5 +1,9 @@
+import lejos.robotics.RegulatedMotor;
 import lejos.hardware.motor.Motor;
-import lejos.hardware.motor.BaseRegulatedMotor;
+import lejos.robotics.chassis.Chassis;
+import lejos.robotics.chassis.WheeledChassis;
+import lejos.robotics.chassis.Wheel;
+import lejos.robotics.navigation.MovePilot;
 import lejos.hardware.Button;
 import lejos.hardware.port.Port;
 import lejos.hardware.port.SensorPort;
@@ -21,8 +25,7 @@ public class Wanderer {
     private SampleProvider distBackL;
     
     //Motors
-    private BaseRegulatedMotor left;
-    private BaseRegulatedMotor right;
+    private MovePilot pilot;
 
     //Wandering
     private Vector wanderDir;
@@ -32,24 +35,26 @@ public class Wanderer {
     private float decayRate;
     
     public static void main(String[] args) {
-        Wanderer pilot = new Wanderer((BaseRegulatedMotor)Motor.C, 
-                        (BaseRegulatedMotor)Motor.A,
+        Wheel left = WheeledChassis.modelWheel(Motor.C, 49.6).offset(70);
+        Wheel right = WheeledChassis.modelWheel(Motor.A, 49.6).offset(-70);
+        Chassis chassis = new WheeledChassis(new Wheel[] { left, right }, WheeledChassis.TYPE_DIFFERENTIAL);
+        MovePilot pilot = new MovePilot(chassis);
+        Wanderer control = new Wanderer(pilot,
                         SensorPort.S1, SensorPort.S2,
                         SensorPort.S3, (float)0.9);
 
-        pilot.drive(200,5000);
+        control.drive(200,5000);
     }
 
     /*
      * Constructor Method
      */
-    public Wanderer(BaseRegulatedMotor l,
-                    BaseRegulatedMotor r,
+    public Wanderer(MovePilot pilot,
                     Port f, Port bL,
                     Port bR, float decay){
-        this.left = l;
-        this.right = r;
         
+        this.pilot = pilot;
+
         this.forward = new EV3UltrasonicSensor(f);
         this.backLeft = new EV3UltrasonicSensor(bL);
         this.backRight = new EV3UltrasonicSensor(bR);
@@ -65,20 +70,18 @@ public class Wanderer {
     }
 
     public void drive(float speed, long time) {
-        left.forward();
-        right.forward();
+        pilot.forward();
         while(Button.ESCAPE.isUp()){
             Vector heading = avoid();
             wander(speed, time);
             heading.Add(this.wanderDir);
             //move the robot along this heading
-            float turn = (heading.direction / (float)(2*Math.PI)) * heading.magnitude;
-            left.setSpeed(speed + turn);
-            right.setSpeed(speed - turn);
+            pilot.setLinearSpeed(speed * heading.magnitude);
+            pilot.rotate((180/Math.PI)*heading.direction);
         }
-        left.stop();
-        right.stop();
+        pilot.stop();
     }
+
     
     /*
      * generates random heading
@@ -103,17 +106,17 @@ public class Wanderer {
         float[] distanceSample = new float[this.distForward.sampleSize()];
         Vector heading = new Vector();
         
-        //forward
+        //forward (pulled 180 degrees)
         this.distForward.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)0.0, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)3.14159, averageDistance(distanceSample)));
     
-        //back right (240 degrees)
+        //back right (pulled 300 degrees)
         this.distBackR.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)4.1888, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)5.23599, averageDistance(distanceSample)));
         
-        //back left (180 degress)
+        //back left (pulled 60 degress)
         this.distBackL.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)2.0944, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)1.04720, averageDistance(distanceSample)));
         
         return heading;
     }
