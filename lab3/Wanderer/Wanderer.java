@@ -5,13 +5,10 @@ import lejos.hardware.port.SensorPort;
 import lejos.hardware.sensor.EV3UltrasonicSensor;
 import lejos.hardware.sensor.SensorMode;
 import java.lang.*;
+import java.util.Random;
 
 public class Wanderer {
-    //Private Variables
-    //Target
-    private float r;
-    private float theta;
-    
+
     //Ultrasonic Sensors
     private EV3UltrasonicSensor forward;
     private EV3UltrasonicSensor backLeft;
@@ -22,7 +19,6 @@ public class Wanderer {
     private SampleProvider distBackR;
     private SampleProvider distBackL;
     
-
     //Motors
     private BaseRegulatedMotor left;
     private BaseRegulatedMotor right;
@@ -32,7 +28,7 @@ public class Wanderer {
 				    (BaseRegulatedMotor)Motor.A,
 				    SensorPort.S1, SensorPort.S2,
 				    SensorPort.S3);
-	pilot.drive(200);
+	pilot.drive(200,5000);
 	/*
 	final EV3 ev3 = (EV3) BrickFinder.getLocal();
 	TextLCD lcd = ev3.getTextLCD();
@@ -68,53 +64,82 @@ public class Wanderer {
 
 	this.distForward = forward.getDistanceMode();
 	this.distBackR = backRight.getDistanceMode();
-	this.distBackL = backLeft.getDistanceMode();    
+	this.distBackL = backLeft.getDistanceMode();
     }
 
-    public void drive(float speed){
+    public void drive(float speed, float time){
+	float[] heading = wander(100);
 	while(Button.ESCAPE.isUp()){
-	    if(vectorSum() > 0){
-		toTarget();
-	    } else{
-		wander();
+	    if(System.currentTimeMillis()%time == 0){
+		heading = wander(100);
 	    }
+	    avoid(heading);
 	}
     }
-    
-    private void wander(){
-	 
+    /*
+     * adjusts actuator output
+     * @param vector: heading to wander toward
+     */
+    private void avoid(float vector[]){
+	float turn = 0;
+	float[] heading = {0,0};
+
+	heading = vectorSum(heading);
+	//set motors
+	//negative theta -> right
+	//postive theta -> left
 	
-	// if vectorSum == 0, then no target
-	//generate random target
     }
-
-    private void toTarget(){
-	//if r != 0, move toward target
+    /*
+     * generates random heading
+     * @param: constraint for heading magnitude
+     */
+    private void wander(float distMax){
+	//generate random vector
+	float[] vector = new float[2];
+	vector[1] = Math.Random() * 2 * Math.PI;
+	vector[0] = Math.Random() * distMax;
+	return vector;
     }
-
-    private float vectorSum(){
+    /*
+     * Performs vector sum to generate heading consider
+     *  sensed data
+     * @param vector: current heading
+     */
+    private float vectorSum(float vector[]){
 	float r = 0;
 	float xSum = 0;
 	float ySum = 0;
+	float[] heading = {0,0};
 	float[] distanceSample = new float[this.distForward];
+	//forward
 	this.distForward.fetchSample(distanceSample,0);
 	r = averageDistance(distanceSample);
-	xSum= xSum + r * Math.cos(0);
-	ySum = ySum + r * Math.sin(0);
+	xSum= xSum - r * Math.cos(0);
+	ySum = ySum - r * Math.sin(0);
+	//back right
 	this.distBackR.fetchSample(distanceSample,0);
 	r = averageDistance(distanceSample);
-	xSum= xSum + r * Math.cos(0);
-	ySum = ySum + r * Math.sin(0);
+	xSum= xSum - r * Math.cos(4*Math.PI/3);
+	ySum = ySum - r * Math.sin(4*Math.PI/3);
+	//back left
 	this.distBackL.fetchSample(distanceSample,0);
 	r = averageDistance(distanceSample);
-	xSum= xSum + r * Math.cos(0);
-	ySum = ySum + r * Math.sin(0);
-	this.r = Math.sqrt((ySum*ySum)+(xSum*xSum));
-	this.theta = Math.atan(ySum/xSum);
-	//r and theta with vector sum
-	return this.r;
-    }
+	xSum= xSum - r * Math.cos(2*Math.PI/3);
+	ySum = ySum - r * Math.sin(2*Math.PI/3);
+	//wander heading
+	xSum = xSum + vector[0]*Math.cos(vector[1]);
+	ySum = ySum + vector[0]*Math.sin(vector[1]);
+	
+	heading[0] = Math.sqrt((ySum*ySum)+(xSum*xSum));
+	heading[1] = Math.atan(ySum/xSum);
 
+	return heading;
+    }
+    /*
+     * calculates average distance
+     * @param sample: sample of distance from sensor
+     */
     private float averageDistance(float[] sample){
 	float avg = 0;
 	for (int ndx = 0; ndx < sample.length ; ndx++){
