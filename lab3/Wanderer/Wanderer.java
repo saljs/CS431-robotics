@@ -1,9 +1,5 @@
-import lejos.robotics.RegulatedMotor;
 import lejos.hardware.motor.Motor;
-import lejos.robotics.chassis.Chassis;
-import lejos.robotics.chassis.WheeledChassis;
-import lejos.robotics.chassis.Wheel;
-import lejos.robotics.navigation.MovePilot;
+import lejos.hardware.motor.BaseRegulatedMotor;
 import lejos.hardware.Button;
 import lejos.hardware.port.Port;
 import lejos.hardware.port.SensorPort;
@@ -25,7 +21,8 @@ public class Wanderer {
     private SampleProvider distBackL;
     
     //Motors
-    private MovePilot pilot;
+    private BaseRegulatedMotor left;
+    private BaseRegulatedMotor right;
 
     //Wandering
     private Vector wanderDir;
@@ -35,26 +32,25 @@ public class Wanderer {
     private float decayRate;
     
     public static void main(String[] args) {
-        Wheel left = WheeledChassis.modelWheel(Motor.C, 49.6).offset(70);
-        Wheel right = WheeledChassis.modelWheel(Motor.A, 49.6).offset(-70);
-        Chassis chassis = new WheeledChassis(new Wheel[] { left, right }, WheeledChassis.TYPE_DIFFERENTIAL);
-        MovePilot pilot = new MovePilot(chassis);
-        Wanderer control = new Wanderer(pilot,
+        Wanderer pilot = new Wanderer((BaseRegulatedMotor)Motor.C, 
+                        (BaseRegulatedMotor)Motor.A,
                         SensorPort.S1, SensorPort.S2,
                         SensorPort.S3, (float)0.9);
 
-        control.drive(200,5000);
+        //Kf Kt maxDist time
+        pilot.drive((float)200.0, (float)100.0, (float)0.2, 5000);
     }
 
     /*
      * Constructor Method
      */
-    public Wanderer(MovePilot pilot,
+    public Wanderer(BaseRegulatedMotor l,
+                    BaseRegulatedMotor r,
                     Port f, Port bL,
                     Port bR, float decay){
+        this.left = l;
+        this.right = r;
         
-        this.pilot = pilot;
-
         this.forward = new EV3UltrasonicSensor(f);
         this.backLeft = new EV3UltrasonicSensor(bL);
         this.backRight = new EV3UltrasonicSensor(bR);
@@ -69,19 +65,35 @@ public class Wanderer {
         this.decayRate = decay;
     }
 
-    public void drive(float speed, long time) {
-        pilot.forward();
+    public void drive(float Kf, float Kt, float distMax, long time) {
         while(Button.ESCAPE.isUp()){
             Vector heading = avoid();
-            wander(speed, time);
+            wander(distMax, time);
             heading.Add(this.wanderDir);
             //move the robot along this heading
-            pilot.setLinearSpeed(speed * heading.magnitude);
-            pilot.rotate((180/Math.PI)*heading.direction);
+            float speedL, speedR;
+            speedL = Kf * heading.magnitude;
+            speedR = Kf * heading.magnitude;
+            speedL += heading.direction * Kt;
+            speedR -= heading.direction * Kt;
+            left.setSpeed(Math.abs(speedL));
+            right.setSpeed(Math.abs(speedR));
+            if(speedL > 0) {
+                left.backward();
+            }
+            else {
+                left.forward();
+            }
+            if(speedR > 0) {
+                right.backward();
+            }
+            else {
+                right.forward();
+            }
         }
-        pilot.stop();
+        left.stop();
+        right.stop();
     }
-
     
     /*
      * generates random heading
@@ -106,17 +118,17 @@ public class Wanderer {
         float[] distanceSample = new float[this.distForward.sampleSize()];
         Vector heading = new Vector();
         
-        //forward (pulled 180 degrees)
+        //forward
         this.distForward.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)3.14159, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)0.0, averageDistance(distanceSample)));
     
-        //back right (pulled 300 degrees)
+        //back right (240 degrees)
         this.distBackR.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)5.23599, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)4.1888, averageDistance(distanceSample)));
         
-        //back left (pulled 60 degress)
+        //back left (180 degress)
         this.distBackL.fetchSample(distanceSample,0);
-        heading.Add(new Vector((float)1.04720, averageDistance(distanceSample)));
+        heading.Add(new Vector((float)2.0944, averageDistance(distanceSample)));
         
         return heading;
     }
