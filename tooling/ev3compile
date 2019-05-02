@@ -2,8 +2,8 @@
 
 javac -g -classpath /opt/leJOS_EV3/lib/ev3/ev3classes.jar $1.java &&
 echo "Main-class: $1" > $1.manifest &&
-echo "Class-Path: /opt/leJOS_EV3/lib/ev3/ev3classes.jar" >> $1.manifest &&
+echo "Class-Path: /opt/leJOS_EV3/lib/ev3/ev3classes.jar /usr/share/java/jna.jar" >> $1.manifest &&
 jar -cfvm $1.jar $1.manifest *.class &&
-/opt/leJOS_EV3/bin/ev3scpupload -n $2 $1.jar /home/lejos/programs/$1.jar
+ev3scpupload -n $2 $1.jar /home/lejos/programs/$1.jar
 
 rm $1.manifest
